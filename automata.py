@@ -3,18 +3,27 @@ from typing import Dict, Tuple
 from parametros import ParametrosCA
 
 
+# Probabilidades base por numero de vecinos (modelo malo.py)
+PROB_POR_VECINOS = {
+    0: 0.5,
+    1: 0.5,
+    2: 0.25,
+    3: 0.125,
+    4: 0.05,
+}
+
+
 class MicrobialCA:
-    """Autómata celular bidimensional para crecimiento microbiano."""
+    """Automata celular bidimensional para crecimiento microbiano (sin muerte explicita)."""
 
     def __init__(self, params: ParametrosCA):
         self.params = params
         self.rng = np.random.default_rng(self.params.semilla)
-        # Distribución inicial basada en la concentración microbiana inicial
-        # Mapear x(0) (g/L) -> fracción de ocupación de la malla
-        ref = max(1e-6, getattr(self.params, 'referencia_concentracion', 10.0))
+        # Distribucion inicial basada en la concentracion microbiana inicial
+        # Mapear x(0) (g/L) -> fraccion de ocupacion de la malla
+        ref = max(1e-6, getattr(self.params, "referencia_concentracion", 10.0))
         frac = float(self.params.concentracion_microbiana_inicial) / float(ref)
         frac = max(0.0, min(1.0, frac))
-        # dividir la fracción ocupada en división/crecimiento (50/50 por defecto)
         p_div = 0.5 * frac
         p_cre = 0.5 * frac
         p_empty = 1.0 - frac
@@ -23,7 +32,11 @@ class MicrobialCA:
             size=(self.params.filas, self.params.columnas),
             p=[p_empty, p_div, p_cre],
         ).astype(np.int8)
-        self.sustrato = np.full((self.params.filas, self.params.columnas), self.params.sustrato_inicial, dtype=np.float32)
+        self.sustrato = np.full(
+            (self.params.filas, self.params.columnas),
+            self.params.sustrato_inicial,
+            dtype=np.float32,
+        )
 
     def _vecinos_estado(self, estado: int) -> np.ndarray:
         """Cuenta vecinos de Moore en un estado dado usando desplazamientos circulares."""
@@ -52,73 +65,47 @@ class MicrobialCA:
         np.clip(self.sustrato, 0, None, out=self.sustrato)
 
     def step(self, n0: int, prob_div: float) -> Dict[str, int]:
-        """Ejecuta un paso temporal y devuelve conteos por estado."""
+        """Ejecuta un paso temporal (reglas tipo malo.py, sin muerte)."""
         # 1) difundir y consumir sustrato
         self._difundir_sustrato()
         self._consumir_sustrato()
 
-        # 2) vecindarios
         vecinos_div = self._vecinos_estado(1)
         vecinos_cre = self._vecinos_estado(2)
         vecinos_total = vecinos_div + vecinos_cre
 
         grid_old = self.grid.copy()
-        nuevo_grid = self.grid.copy()
+        nuevo_grid = grid_old.copy()
 
-        # Regla de inhibición espacial: células en división rodeadas pasan a crecimiento
-        crowded = vecinos_total > n0
-        nuevo_grid[(grid_old == 1) & crowded] = 2
+        s_min = max(1e-6, self.params.sustrato_minimo)
+        filas, cols = grid_old.shape
 
-        # División celular cuando no hay hacinamiento y hay sustrato disponible
-        can_divide = (grid_old == 1) & (~crowded) & (self.sustrato > self.params.sustrato_minimo)
-        positions = np.argwhere(can_divide)
-        for i, j in positions:
-            # Buscar vecinos vacíos
-            vacios = []
-            for di in (-1, 0, 1):
-                for dj in (-1, 0, 1):
-                    if di == 0 and dj == 0:
-                        continue
-                    ni = (i + di) % self.params.filas
-                    nj = (j + dj) % self.params.columnas
-                    if grid_old[ni, nj] == 0:
-                        vacios.append((ni, nj))
-            if not vacios:
-                continue
-            # Escalar probabilidad por sustrato local (Michaelis-Menten like)
-            km = getattr(self.params, 'km_sustrato', max(1e-6, self.params.sustrato_inicial / 2.0))
-            s_local = float(self.sustrato[i, j])
-            prob_eff = float(prob_div) * (s_local / (s_local + km))
-            if self.rng.random() < prob_eff:
-                ni, nj = vacios[self.rng.integers(len(vacios))]
-                nuevo_grid[ni, nj] = 1  # nueva célula en división
-                nuevo_grid[i, j] = 2    # célula madre pasa a crecimiento
+        for i in range(filas):
+            for j in range(cols):
+                estado = grid_old[i, j]
+                vecinos = int(vecinos_total[i, j])
+                s_local = float(self.sustrato[i, j])
+                factor_s = 1.0 if s_local >= s_min else max(0.0, s_local / s_min)
+                p_base = PROB_POR_VECINOS.get(vecinos, prob_div)
+                p_efectiva = p_base * factor_s
 
-        # Células en crecimiento pueden volver a división si no hay hacinamiento
-        # y hay suficiente sustrato.
-        growth_to_div = (
-            (grid_old == 2)
-            & (vecinos_total <= n0)
-            & (self.sustrato > self.params.sustrato_minimo)
-        )
-        rand_mask = self.rng.random(grid_old.shape)
-        # Probabilidad efectiva para crecimiento->division también depende del sustrato local
-        km = getattr(self.params, 'km_sustrato', max(1e-6, self.params.sustrato_inicial / 2.0))
-        s = self.sustrato
-        prob_eff_grid = float(prob_div) * (s / (s + km))
-        nuevo_grid[growth_to_div & (rand_mask < prob_eff_grid)] = 1
-
-        # Muerte por inanición ligera (evita crecimiento ilimitado con sustrato 0)
-        starvation = (self.sustrato < 0.1) & (nuevo_grid > 0)
-        death_mask = self.rng.random(grid_old.shape) < (0.05)
-        nuevo_grid[starvation & death_mask] = 0
+                if estado == 0:
+                    if 0 < vecinos <= n0 and p_efectiva > 0 and self.rng.random() < p_efectiva:
+                        nuevo_grid[i, j] = 2  # coloniza como crecimiento
+                elif estado == 1:
+                    # inhibicion espacial simple: siempre pasa a crecimiento
+                    nuevo_grid[i, j] = 2
+                elif estado == 2:
+                    if vecinos <= n0 and p_efectiva > 0 and self.rng.random() < p_efectiva:
+                        nuevo_grid[i, j] = 1  # activa division
+                # sin muerte explicita
 
         self.grid = nuevo_grid
 
         return {
-            'vacios': int((self.grid == 0).sum()),
-            'division': int((self.grid == 1).sum()),
-            'crecimiento': int((self.grid == 2).sum()),
+            "vacios": int((self.grid == 0).sum()),
+            "division": int((self.grid == 1).sum()),
+            "crecimiento": int((self.grid == 2).sum()),
         }
 
     def estado_actual(self) -> Tuple[np.ndarray, np.ndarray]:

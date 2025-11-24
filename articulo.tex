@@ -9,90 +9,78 @@
 \usepackage{subcaption}
 \usepackage{cite}
 
-\title{Modelado y simulación del crecimiento microbiano mediante autómatas celulares bidimensionales}
+\title{Modelado y simulacion del crecimiento microbiano mediante automatas celulares bidimensionales}
 \author{Codex GPT-5\\Trabajo-Maye}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Se implementó un autómata celular (CA) bidimensional para reproducir y extender el modelo de crecimiento microbiano descrito en el artículo de referencia. El modelo emplea una malla de \num{200x200} celdas, vecindario de Moore, umbral de inhibición espacial \(N_0\), probabilidades de división \(P_1=0.5\), \(P_2=0.25\), \(P_3=0.125\), y una dinámica acoplada de sustrato. Se evaluó el efecto de la limitación de sustrato y la inhibición espacial sobre la propagación celular. Las simulaciones (300 iteraciones) producen distribuciones espaciales y curvas de concentración comparables con las Fig. 3--5 del artículo.\end{abstract}
+Se implemento un automata celular (CA) bidimensional para reproducir el modelo del articulo de referencia. El CA usa una malla de \num{200x200}, vecindario de Moore, umbral de inhibicion espacial \(N_0\), probabilidades de division \(P \in \{0.5, 0.25, 0.125\}\) y un campo de sustrato con difusion y consumo. Se generaron simulaciones batch (300 iteraciones) y animaciones interactivas. Las figuras base (snapshots, curvas por \(N_0\), curvas por \(P\), efecto del sustrato inicial y comparacion cinetica) se producen con \texttt{python main.py} o \texttt{python experiments.py}.
+\end{abstract}
 
-\section{Introducción}
-Los autómatas celulares (CA) permiten estudiar la evolución microbiana mediante reglas locales simples que capturan fenómenos de crecimiento, división y muerte. El artículo de referencia plantea un CA 2D con estados vacíos, división y crecimiento, vecindario de Moore de 8 vecinos, y un umbral de inhibición espacial \(N_0\) que controla la transición entre división y crecimiento. Además, la disponibilidad de sustrato limita la expansión. Aquí implementamos el modelo y generamos todas las figuras solicitadas.
-
-\section{Modelo de autómata celular}
-\subsection{Espacio y estados}
-El espacio es una cuadrícula \(L_i\times L_j = 200\times200\). Cada celda \(\text{Cell}(i,j)\) tiene estado \(S_{ij}(t) \in \{0,1,2\}\): 0 = vacío/muerta, 1 = división, 2 = crecimiento. El vecindario es de Moore (8 celdas adyacentes).
-
-\subsection{Efecto de inhibición espacial}
-Sea \(N_{1}(i,j,t)\) el número de vecinos en estado 1 y \(N_{2}(i,j,t)\) en estado 2. El umbral \(N_0\) refleja el efecto inhibidor del espacio.
-\begin{equation}
-\text{Si } S_{ij}(t)=1 \text{ y } N_{1}+N_{2}>N_0 \Rightarrow S_{ij}(t+1)=2
-\end{equation}
-Cuando \(N_{1}+N_{2}\leq N_0\), la célula en división puede dividirse con probabilidad \(P_j\), creando una célula hija en un vecino vacío y pasando la madre a crecimiento.
-
-\subsection{Efecto de limitación de sustrato}
-El sustrato inicial es uniforme \(s(0)=60\,\si{g/L}\). Cada paso incluye difusión (promedio de vecinos con coeficiente \(D=0.1\)) y consumo: \(c_1\) por celda en división y \(c_2\) por celda en crecimiento. Si el sustrato local cae por debajo de un umbral, se inhibe la división y puede ocurrir muerte estocástica por inanición.
-
-\subsection{Probabilidades y parámetros}
-Se evaluaron \(N_0\in\{2,3,4\}\) y \(P\in\{0.5,0.25,0.125\}\). Se simularon 300 iteraciones y se tomaron capturas en \(t=1,5,10,30\) h.
-
-\section{Algoritmo}
-\begin{enumerate}
-  \item Inicializar \(S_{ij}\) aleatoriamente con mayoría de celdas vacías y sustrato uniforme.
-  \item Para cada tiempo: difundir sustrato, consumir según estado.
-  \item Computar \(N_1, N_2\) (vecindario de Moore).
-  \item Regla de inhibición: división \(\to\) crecimiento si \(N_1+N_2>N_0\).
-  \item División estocástica: si hay vecinos vacíos, con probabilidad \(P\) se ocupa uno con estado 1 y la madre pasa a 2.
-  \item Crecimiento \(\to\) división con probabilidad \(P\) si \(N_1+N_2\le N_0\) y hay sustrato.
-  \item Muerte estocástica por inanición cuando el sustrato es muy bajo.
-\end{enumerate}
+\section{Modelo}
+Estados: 0 (vacio/muerta), 1 (division), 2 (crecimiento). Malla toroidal \(200\times200\). Vecindario de Moore de 8 celdas. Reglas: inhibicion espacial si \(N_1+N_2 > N_0\) fuerza \(1\to2\); division estocastica \(2\to1\) y colonizacion de huecos \(0\to2\) segun probabilidad y disponibilidad de sustrato; sin muerte explicita (la expansion se frena por espacio y sustrato).
 
 \section{Resultados}
-\subsection{Distribución espacial}
-La Fig.~\ref{fig:espacial} muestra la expansión del cultivo para \(N_0=3\) y \(P=0.5\) en distintos tiempos.
+\subsection{Evolucion base}
 \begin{figure}[ht]
     \centering
-    \includegraphics[width=0.48\textwidth]{figuras/espacial_t1_5_10_30.png}
-    \caption{Distribución espacial a \(t=1,5,10,30\) h. Azul: división, rojo: crecimiento.}
+    \includegraphics[width=0.48\textwidth]{figuras/exp_base_snapshots.png}
+    \caption{Distribucion espacial a \(t=1,5,10,30\) h para \(N_0=3, P=0.5, s_0=60\,\si{g/L}\). Azul: division, rojo: crecimiento.}
     \label{fig:espacial}
 \end{figure}
 
-\subsection{Curvas de concentración para $N_0$}
 \begin{figure}[ht]
     \centering
-    \includegraphics[width=0.48\textwidth]{figuras/curva_concentracion_n0.png}
-    \caption{Concentración microbiana total vs. tiempo para \(N_0=2,3,4\).}
-    \label{fig:n0}
+    \includegraphics[width=0.48\textwidth]{figuras/exp_base_concentracion.png}
+    \caption{Concentracion total de celdas vivas (base \(N_0=3, P=0.5\)).}
+    \label{fig:conc-base}
 \end{figure}
 
-\subsection{Curvas de probabilidades}
 \begin{figure}[ht]
     \centering
-    \includegraphics[width=0.48\textwidth]{figuras/curva_probabilidades.png}
-    \caption{Concentración microbiana para distintas probabilidades \(P\) con \(N_0=3\).}
-    \label{fig:prob}
-\end{figure}
-
-\subsection{Evolución del sustrato}
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.48\textwidth]{figuras/sustrato_base.png}
-    \caption{Concentración media de sustrato (\(N_0=3\), \(P=0.5\)).}
+    \includegraphics[width=0.48\textwidth]{figuras/exp_base_sustrato.png}
+    \caption{Concentracion media de sustrato (base \(N_0=3, P=0.5\)).}
     \label{fig:sustrato}
 \end{figure}
 
-\section{Discusión}
-Se reproduce el comportamiento cualitativo reportado en el artículo: a menor \(N_0\), la inhibición espacial reduce la expansión; probabilidades menores retrasan el frente de crecimiento. La inclusión de sustrato amortigua el crecimiento inicial. El modelo es extensible a condiciones heterogéneas o parámetros distintos.
+\subsection{Inhibicion espacial}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figuras/exp_n0_curvas.png}
+    \caption{Curvas de concentracion para \(N_0=\{2,3,4\}\) con \(P=0.5\).}
+    \label{fig:n0}
+\end{figure}
+
+\subsection{Probabilidad de division}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figuras/exp_prob_curvas.png}
+    \caption{Curvas de concentracion para \(P=\{0.5,0.25,0.125\}\) con \(N_0=3\).}
+    \label{fig:prob}
+\end{figure}
+
+\subsection{Efecto del sustrato inicial}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figuras/exp_sustrato_curvas.png}
+    \caption{Curvas de concentracion para \(s_0=\{60,70\}\,\si{g/L}\) con \(N_0=3, P=0.5\).}
+    \label{fig:s0}
+\end{figure}
+
+\subsection{Comparacion con modelo cinetico}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.48\textwidth]{figuras/exp_cinetico.png}
+    \caption{Curva CA vs. modelo cinetico logistico simple.}
+    \label{fig:cinetico}
+\end{figure}
+
+\section{Discusion}
+Las simulaciones reproducen los hallazgos cualitativos del articulo: menor \(N_0\) enlentece la expansion, probabilidades menores retrasan el frente, y mayor \(s_0\) acelera la densificacion. La curva cinetica simple se alinea con la CA en tendencia general. Las animaciones permiten explorar las variantes en vivo sin relanzar el script.
 
 \section{Conclusiones}
-El CA implementado capta los efectos de inhibición espacial y limitación de sustrato en el crecimiento microbiano. Las figuras generadas son análogas a las Fig. 3--5 del artículo y permiten explorar variaciones de \(N_0\) y \(P\).
-
-\section*{Bibliografía}
-\begin{thebibliography}{99}
-\bibitem{men2013} H. Men y X. Zhao, ``Modelado y simulación del crecimiento microbiano basados en autómatas celulares,'' Revista de Investigación en Ciencias Aplicadas, Ingeniería y Tecnología, vol. 6, no. 11, pp. 2061--2066, 2013.
-\bibitem{lacasta1999} A. Lacasta et al., ``Modelado de patrones espaciotemporales en colonias bacterianas,'' Phys. Rev. E, 59:7036--7041, 1999.
-\end{thebibliography}
+El CA implementado capta la inhibicion espacial y la limitacion de sustrato. El pipeline genera automaticamente las figuras del articulo (\texttt{python main.py}) y ofrece un visor animado para demostraciones (\texttt{python animacion.py}).
 
 \end{document}

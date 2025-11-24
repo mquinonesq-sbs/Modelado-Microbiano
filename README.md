@@ -10,7 +10,9 @@ Repositorio depurado para correr la simulacion interactiva y las rutinas batch. 
 - simulacion.py: ejecutar_simulacion y ResultadoSimulacion para corridas batch.
 - visualizacion.py: helpers de graficacion (plot_snapshots, plot_curvas_n0, etc.).
 - viewer.py: nueva interfaz con controles agrupados, comparadores y exportacion de datos.
-- main.py: script de ejemplo que genera figuras del preset del articulo.
+- experiments.py: genera todas las figuras estaticas usadas en el articulo.
+- main.py: atajo que ejecuta experiments.py.
+- animacion.py: animacion unica con selector de experimentos (base, N0, P, s0, cinetico) sin reiniciar el script.
 
 ## Instalacion rapida
 
@@ -29,11 +31,15 @@ Repositorio depurado para correr la simulacion interactiva y las rutinas batch. 
 - Botones: Pause/Play, Step, Reset, Apply Grid, Init from x0, Load Article, Save/Load Preset, Export CSV, Open Compare (vista inline) y Compare Window (ventana externa con tres simulaciones).
 - Exporta la serie temporal a figuras/historial_viewer.csv para documentar cada demo.
 
-### Simulacion batch
+### Simulacion batch (figuras para el articulo)
 
     python main.py
 
-Genera SVG con snapshots y curvas dentro de figuras/.
+### Animacion rapida estilo documento
+
+    python animacion.py
+
+Selector interactivo para ver los diferentes experimentos sin reiniciar (base, N0, P, s0, cinetico).
 
 ## Estructura
 
