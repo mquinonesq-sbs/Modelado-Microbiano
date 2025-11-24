@@ -5,7 +5,6 @@ Corre una sola vez y puedes cambiar de experimento en vivo con los controles.
 
 from __future__ import annotations
 
-import math
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -16,12 +15,19 @@ from automata import MicrobialCA
 from parametros import articulo_preset
 
 # Ajustes globales
-GRID_SIZE = 100
+GRID_SIZE = 80
 FRAMES = 200
 INTERVAL_MS = 100
 PATCH_SIZE = 1  # 1 celula en division al centro (garantiza expansion)
 
 MODOS = ["base", "n0", "prob", "sustrato", "cinetico"]
+MODE_COLORS = {
+    "base": "tab:blue",
+    "n0": "tab:green",
+    "prob": "tab:orange",
+    "sustrato": "tab:red",
+    "cinetico": "tab:purple",
+}
 
 
 def crear_ca(n0: int, prob: float, s0: float) -> MicrobialCA:
@@ -51,21 +57,22 @@ def main() -> None:
         "prob": 0.5,
         "s0": 60.0,
     }
+    anim_running = True
 
     ca = crear_ca(state["n0"], state["prob"], state["s0"])
     historia: list[int] = []
 
-    fig, (ax_grid, ax_curve) = plt.subplots(1, 2, figsize=(11, 6))
-    plt.subplots_adjust(left=0.30, bottom=0.22)
+    fig, (ax_grid, ax_curve) = plt.subplots(1, 2, figsize=(12, 6), gridspec_kw={"width_ratios": [1, 1.2]})
+    plt.subplots_adjust(left=0.32, right=0.95, bottom=0.23, wspace=0.35)
 
     cmap_estados = ListedColormap(["black", "blue", "red"])
     im = ax_grid.imshow(ca.grid, cmap=cmap_estados, vmin=0, vmax=2, origin="lower")
     ax_grid.set_title("Automata celular microbiano")
-    cbar = plt.colorbar(im, ax=ax_grid)
+    cbar = fig.colorbar(im, ax=ax_grid, fraction=0.046, pad=0.04)
     cbar.set_label("Estado\n0: vacio, 1: division, 2: crecimiento")
 
-    linea_ca, = ax_curve.plot([], [], marker="o", label="CA")
-    linea_kin, = ax_curve.plot([], [], label="Modelo cinetico", alpha=0.5)
+    linea_ca, = ax_curve.plot([], [], marker="o", markersize=4, label="CA", color=MODE_COLORS["base"])
+    linea_kin, = ax_curve.plot([], [], label="Modelo cinetico", alpha=0.5, color="gray")
     ax_curve.set_xlim(0, FRAMES)
     ax_curve.set_ylim(0, GRID_SIZE * GRID_SIZE)
     ax_curve.set_xlabel("Paso de tiempo")
@@ -89,6 +96,8 @@ def main() -> None:
 
     ax_reset = plt.axes([0.05, 0.18, 0.20, 0.05])
     btn_reset = Button(ax_reset, "Aplicar / Reiniciar")
+    ax_pause = plt.axes([0.05, 0.10, 0.20, 0.05])
+    btn_pause = Button(ax_pause, "Pausar / Reanudar")
 
     def reset_ca():
         nonlocal ca, historia
@@ -96,11 +105,25 @@ def main() -> None:
         historia = []
         linea_ca.set_data([], [])
         linea_kin.set_data([], [])
+        linea_ca.set_color(MODE_COLORS.get(state["modo"], "tab:blue"))
+        linea_ca.set_label(f"CA ({state['modo']})")
         ax_curve.set_ylim(0, GRID_SIZE * GRID_SIZE)
         if state["modo"] == "cinetico":
             t = np.arange(FRAMES, dtype=float)
             kin = modelo_cinetico(t, x0=1.0, k=GRID_SIZE * GRID_SIZE * 0.9, mu=0.05)
             linea_kin.set_data(t, kin)
+        else:
+            linea_kin.set_data([], [])
+        ax_curve.set_xlim(0, FRAMES)
+        titulo = f"Modo: {state['modo']} | N0={state['n0']} | P={state['prob']} | s0={state['s0']}"
+        ax_curve.set_title(titulo)
+        # Actualizar leyenda solo con las curvas visibles
+        handles = [linea_ca]
+        labels = [linea_ca.get_label()]
+        if state["modo"] == "cinetico":
+            handles.append(linea_kin)
+            labels.append(linea_kin.get_label())
+        ax_curve.legend(handles, labels)
         fig.canvas.draw_idle()
 
     def on_radio(label):
@@ -141,8 +164,14 @@ def main() -> None:
     slider_prob.on_changed(on_slider)
     slider_s0.on_changed(on_slider)
     btn_reset.on_clicked(on_reset)
+    def on_pause(_event):
+        nonlocal anim_running
+        anim_running = not anim_running
+    btn_pause.on_clicked(on_pause)
 
     def actualizar(_frame):
+        if not anim_running:
+            return im, linea_ca, linea_kin
         counts = ca.step(n0=state["n0"], prob_div=state["prob"])
         vivos = counts["division"] + counts["crecimiento"]
         historia.append(vivos)
