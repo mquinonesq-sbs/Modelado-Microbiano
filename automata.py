@@ -3,7 +3,8 @@ from typing import Dict, Tuple
 from parametros import ParametrosCA
 
 
-# Probabilidades base por numero de vecinos (modelo malo.py, escalables)
+# Probabilidades base por numero de vecinos activos (vecindad de Moore con bordes
+# toroidales). Se escalan con la probabilidad elegida en cada experimento.
 PROB_POR_VECINOS = {
     0: 0.5,
     1: 0.5,
@@ -13,14 +14,38 @@ PROB_POR_VECINOS = {
 }
 
 
+def contar_vecinos(grid: np.ndarray, i: int, j: int) -> tuple[int, int, int]:
+    """
+    VECINDAD DE MOORE (8 VECINOS) CON FRONTERA PERIODICA.
+    Retorna (n_div, n_cre, vecinos_totales) para la celda (i, j).
+    """
+    n_div = 0
+    n_cre = 0
+    filas, cols = grid.shape
+
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            if di == 0 and dj == 0:
+                continue
+            ni = (i + di) % filas
+            nj = (j + dj) % cols
+            if grid[ni, nj] == 1:
+                n_div += 1
+            elif grid[ni, nj] == 2:
+                n_cre += 1
+
+    vecinos = n_div + n_cre
+    return n_div, n_cre, vecinos
+
+
 class MicrobialCA:
-    """Automata celular bidimensional para crecimiento microbiano (sin muerte explicita)."""
+   
 
     def __init__(self, params: ParametrosCA):
         self.params = params
         self.rng = np.random.default_rng(self.params.semilla)
-        # Distribucion inicial basada en la concentracion microbiana inicial
-        # Mapear x(0) (g/L) -> fraccion de ocupacion de la malla
+        # Distribucion inicial: x(0) (g/L) se mapea a una fraccion de ocupacion
+        # para poblar la malla con estados 1 (division) y 2 (crecimiento).
         ref = max(1e-6, getattr(self.params, "referencia_concentracion", 10.0))
         frac = float(self.params.concentracion_microbiana_inicial) / float(ref)
         frac = max(0.0, min(1.0, frac))
@@ -50,6 +75,8 @@ class MicrobialCA:
         return total
 
     def _difundir_sustrato(self) -> None:
+        # Difusion discreta: promedia sustrato en vecindad Moore y avanza un
+        # paso con coeficiente params.difusion.
         s = self.sustrato
         kernel_mean = sum(
             np.roll(np.roll(s, di, axis=0), dj, axis=1)
@@ -60,6 +87,8 @@ class MicrobialCA:
         self.sustrato = s + self.params.difusion * (kernel_mean - s)
 
     def _consumir_sustrato(self) -> None:
+        # Consumo heterogeneo: las celdas en division consumen mas sustrato
+        # que las que solo crecen, segun coeficientes del preset del articulo.
         self.sustrato -= (self.grid == 1) * self.params.consumo_division
         self.sustrato -= (self.grid == 2) * self.params.consumo_crecimiento
         np.clip(self.sustrato, 0, None, out=self.sustrato)
@@ -85,23 +114,30 @@ class MicrobialCA:
                 estado = grid_old[i, j]
                 vecinos = int(vecinos_total[i, j])
                 s_local = float(self.sustrato[i, j])
+                # Penaliza la division si el sustrato local cae por debajo de s_min.
                 factor_s = 1.0 if s_local >= s_min else max(0.0, s_local / s_min)
-                # Escalar la tabla por prob_div (0.5 reproduce valores base)
+                # Probabilidad base en tabla (inhibicion espacial) escalada con
+                # prob_div. La tabla se definio con prob_div=0.5 como referencia.
                 p_tabla = PROB_POR_VECINOS.get(vecinos, 0.5)
                 escala = prob_div / 0.5 if 0.5 else 1.0
                 p_base = p_tabla * escala
                 p_efectiva = p_base * factor_s
 
                 if estado == 0:
+                    # Colonizacion: si hay entre 1 y N0 vecinos activos y se
+                    # supera la probabilidad efectiva, la celda se vuelve estado 2.
                     if 0 < vecinos <= n0 and p_efectiva > 0 and self.rng.random() < p_efectiva:
                         nuevo_grid[i, j] = 2  # coloniza como crecimiento
                 elif estado == 1:
-                    # inhibicion espacial simple: siempre pasa a crecimiento
+                    # Celula en division pasa obligatoriamente a crecimiento
+                    # (mimetiza la finalizacion del ciclo de division).
                     nuevo_grid[i, j] = 2
                 elif estado == 2:
+                    # Si la presion de vecinos es baja (<= N0) y hay sustrato,
+                    # la celula en crecimiento puede activar division.
                     if vecinos <= n0 and p_efectiva > 0 and self.rng.random() < p_efectiva:
                         nuevo_grid[i, j] = 1  # activa division
-                # sin muerte explicita
+                # Sin regla de muerte: las celdas quedan activas mientras haya sustrato.
 
         self.grid = nuevo_grid
 

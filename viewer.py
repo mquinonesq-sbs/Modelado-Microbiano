@@ -44,6 +44,7 @@ def compare_n0_window(params: ParametrosCA, prob: float) -> None:
     clones = []
     for _ in n0_values:
         ca = MicrobialCA(params)
+        # Se parte de la misma condicion inicial y semilla para aislar el efecto de N0.
         ca.grid = base.grid.copy()
         ca.sustrato = base.sustrato.copy()
         ca.rng = np.random.default_rng(params.semilla)
@@ -193,6 +194,7 @@ class ViewerApp:
         return self.grid_im, self.substrate_line, self.population_line
 
     def _perform_step(self) -> None:
+        # Avanza un paso aplicando la regla con el N0 y probabilidad actuales.
         counts = self.ca.step(self.current_n0, self.current_prob)
         grid, sustrato = self.ca.estado_actual()
         self.history.substrate.append(float(sustrato.mean()))
@@ -297,6 +299,7 @@ class ViewerApp:
             ax.axis("off")
             ax.set_title(f"N0={n0}")
             self._compare_axes.append((ax, MicrobialCA(self.params)))
+        # Temporizador para avanzar en paralelo las simulaciones de N0 mostradas a la derecha.
         self._compare_timer = self.fig.canvas.new_timer(interval=400, callbacks=[(self._step_inline_compare, [], {})])
         self._compare_timer.start()
 
@@ -314,6 +317,7 @@ class ViewerApp:
         if not self._compare_axes:
             return
         for (ax, ca), n0 in zip(self._compare_axes, self.params.n0_valores[: len(self._compare_axes)]):
+            # Se aplica la misma probabilidad actual pero distintos N0 para ver el efecto espacial.
             ca.step(n0=n0, prob_div=self.current_prob)
             grid, _ = ca.estado_actual()
             ax.imshow(_state_to_rgb(grid), origin="lower")

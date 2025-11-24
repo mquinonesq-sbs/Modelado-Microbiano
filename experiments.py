@@ -13,6 +13,7 @@ from visualizacion import plot_curvas_n0, plot_curvas_prob, plot_snapshots, plot
 
 
 def _plot_concentracion(res, titulo: str, destino: Path) -> None:
+    """Curva de celdas vivas (estados 1+2) para un escenario concreto."""
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(res.tiempo, res.concentracion_total(), label="CA")
     ax.set_xlabel("Tiempo (h)")
@@ -25,13 +26,14 @@ def _plot_concentracion(res, titulo: str, destino: Path) -> None:
 
 
 def run_experimentos() -> None:
+    """Ejecuta los experimentos que aparecen en el articulo (N0, P, s0, cinetico)."""
     params = articulo_preset()
-    # Configuracion rapida para generar figuras sin demoras largas
+    # Configuracion mas pequena para generar figuras rapido manteniendo reglas.
     params.filas = 80
     params.columnas = 80
     params.iteraciones = 150
 
-    # Base: snapshots, sustrato, curva de concentracion
+    # Experimento base: N0=3 y P=0.5 (prob_base) igual al preset.
     n0_base = 3
     prob_base = params.probabilidades[0]
     res_base = ejecutar_simulacion(params, n0=n0_base, prob_div=prob_base)
@@ -56,7 +58,7 @@ def run_experimentos() -> None:
         destino=params.carpeta_figuras() / "exp_base_concentracion.png",
     )
 
-    # Barrido de N0
+    # Barrido de N0: compara inhibicion espacial usando el mismo prob_base.
     resultados_n0: Dict[int, object] = {}
     for n0 in params.n0_valores:
         resultados_n0[n0] = ejecutar_simulacion(params, n0=n0, prob_div=prob_base)
@@ -66,7 +68,7 @@ def run_experimentos() -> None:
         destino=params.carpeta_figuras() / "exp_n0_curvas.png",
     )
 
-    # Barrido de probabilidad con N0 fijo
+    # Barrido de probabilidad con N0 fijo (umbral espacial fijo en n0_base).
     resultados_prob: Dict[float, object] = {}
     for prob in params.probabilidades:
         resultados_prob[prob] = ejecutar_simulacion(params, n0=n0_base, prob_div=prob)
@@ -77,7 +79,7 @@ def run_experimentos() -> None:
         n0=n0_base,
     )
 
-    # Efecto de sustrato inicial
+    # Efecto de sustrato inicial: se ajusta s0 y se observa la curva poblacional.
     s0_vals = [60.0, 70.0]
     curvas_s: Dict[float, tuple[list[int], list[int]]] = {}
     for s0 in s0_vals:
@@ -95,7 +97,7 @@ def run_experimentos() -> None:
     fig.savefig(params.carpeta_figuras() / "exp_sustrato_curvas.png", dpi=200)
     plt.close(fig)
 
-    # Comparacion con modelo cinetico simple (logistica)
+    # Comparacion contra un modelo cinetico logistico simple como referencia.
     t = np.array(res_base.tiempo, dtype=float)
     ca_curve = np.array(res_base.concentracion_total(), dtype=float)
     x0 = max(1.0, ca_curve[0])

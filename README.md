@@ -15,6 +15,16 @@ Repositorio depurado para correr la simulacion interactiva y las rutinas batch. 
 - main.py: atajo que ejecuta experiments.py.
 - animacion.py: animacion unica con selector de experimentos (base, N0, P, s0, cinetico) sin reiniciar el script.
 
+## Reglas del automata (resumen)
+
+- Estados: 0=vacío, 1=division, 2=crecimiento.
+- Vecindad: Moore (8 vecinos) con bordes periodicos (toroidal).
+- Inhibicion espacial: si vecinos activos > N0, se bloquea la division.
+- Probabilidad de transicion: tabla `PROB_POR_VECINOS` escalada por `prob_div` (valores usados en el articulo: 0.5, 0.25, 0.125) y modulada por sustrato local (`s_min`).
+- Reglas: 0 -> 2 (coloniza) si 0 < vecinos <= N0 y random < p_efectiva; 2 -> 1 (activa division) si vecinos <= N0 y random < p_efectiva; 1 -> 2 (fin de division) siempre; sin muerte explicita.
+- Sustrato: difusion discreta en vecindad Moore; consumo mayor en estado 1 que en estado 2; inicializado con s0=60 g/L (preset del articulo).
+- Inicializacion: x0=6 g/L se mapea a fraccion de ocupacion inicial; semilla fija para reproducibilidad.
+
 ## Instalacion rapida
 
     python -m venv .venv

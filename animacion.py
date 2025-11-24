@@ -14,11 +14,11 @@ from matplotlib.widgets import Button, RadioButtons, Slider
 from automata import MicrobialCA
 from parametros import articulo_preset
 
-# Ajustes globales
+# Ajustes globales del experimento interactivo (tamaños menores para agilidad)
 GRID_SIZE = 80
 FRAMES = 200
 INTERVAL_MS = 100
-PATCH_SIZE = 1  # 1 celula en division al centro (garantiza expansion)
+PATCH_SIZE = 1  # 1 celula en division al centro para forzar arranque
 
 MODOS = ["base", "n0", "prob", "sustrato", "cinetico"]
 MODE_COLORS = {
@@ -31,6 +31,7 @@ MODE_COLORS = {
 
 
 def crear_ca(n0: int, prob: float, s0: float) -> MicrobialCA:
+    """Crea un CA con un parche central y parametros (N0, P, s0) configurables."""
     params = articulo_preset()
     params.filas = GRID_SIZE
     params.columnas = GRID_SIZE
@@ -46,11 +47,12 @@ def crear_ca(n0: int, prob: float, s0: float) -> MicrobialCA:
 
 
 def modelo_cinetico(t: np.ndarray, x0: float, k: float, mu: float) -> np.ndarray:
+    """Modelo logistico simple usado como referencia poblacional."""
     return k / (1.0 + ((k - x0) / x0) * np.exp(-mu * t))
 
 
 def main() -> None:
-    # Estado mutable del experimento
+    # Estado mutable del experimento (controla reglas: modo, N0, P, s0).
     state = {
         "modo": "base",
         "n0": 3,
@@ -81,7 +83,7 @@ def main() -> None:
     ax_curve.grid(True)
     ax_curve.legend()
 
-    # Controles
+    # Controles para cambiar N0, probabilidad de division y s0 (sustrato inicial).
     ax_radio = plt.axes([0.05, 0.55, 0.20, 0.35])
     radio = RadioButtons(ax_radio, MODOS, active=0)
 
@@ -100,6 +102,7 @@ def main() -> None:
     btn_pause = Button(ax_pause, "Pausar / Reanudar")
 
     def reset_ca():
+        # Reinicia la malla con los parametros actuales del estado (N0, P, s0).
         nonlocal ca, historia
         ca = crear_ca(state["n0"], state["prob"], state["s0"])
         historia = []
@@ -172,6 +175,7 @@ def main() -> None:
     def actualizar(_frame):
         if not anim_running:
             return im, linea_ca, linea_kin
+        # Avanza el CA con la regla (N0, P) y actualiza curva de poblacion viva.
         counts = ca.step(n0=state["n0"], prob_div=state["prob"])
         vivos = counts["division"] + counts["crecimiento"]
         historia.append(vivos)
